@@ -102,6 +102,7 @@ export function buildMemberBreakdown(
   const capped = applyMeetingCap({
     ...raw,
     meetingScore: raw.meetingScoreRaw,
+    total: 0,
   });
   return {
     ...capped,

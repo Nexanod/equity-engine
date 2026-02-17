@@ -72,7 +72,7 @@ export async function POST(req: Request) {
       difficultyWeight,
       businessValueWeight,
       status,
-      createdById: userId,
+      createdBy: { connect: { id: userId } },
       contributions:
         contributions && contributions.length > 0
           ? {

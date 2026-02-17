@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/db";
+import type { FeatureStatus } from "@prisma/client";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -45,14 +46,14 @@ export async function PATCH(
     impactWeight?: number;
     difficultyWeight?: number;
     businessValueWeight?: number;
-    status?: string;
+    status?: FeatureStatus;
     completedAt?: Date;
     weightsLocked?: boolean;
   } = {};
   if (parsed.data.title !== undefined) updates.title = parsed.data.title;
   if (parsed.data.description !== undefined) updates.description = parsed.data.description ?? null;
   if (parsed.data.status) {
-    updates.status = parsed.data.status;
+    updates.status = parsed.data.status as FeatureStatus;
     if (parsed.data.status === "done") {
       updates.completedAt = new Date();
       updates.weightsLocked = true;
