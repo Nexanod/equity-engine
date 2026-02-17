@@ -4,12 +4,18 @@ import { prisma } from "@/lib/db";
 import { AddBugForm } from "./AddBugForm";
 import { EditBugButton } from "./EditBugButton";
 import { DeleteButton } from "../DeleteButton";
+import { ContributorFilter } from "../ContributorFilter";
 
-export default async function BugsPage() {
+type Props = { searchParams: Promise<{ resolvedBy?: string }> };
+
+export default async function BugsPage({ searchParams }: Props) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const { resolvedBy: resolvedById } = await searchParams;
+
   const bugs = await prisma.bugFix.findMany({
+    where: resolvedById ? { resolvedById } : undefined,
     orderBy: { resolvedAt: "desc" },
     include: { member: { select: { id: true, name: true } } },
   });
@@ -20,14 +26,22 @@ export default async function BugsPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Bug fixes</h1>
           <p className="mt-1 text-zinc-400">
             Score = severity × impact × 2. Track who resolved.
           </p>
         </div>
-        <AddBugForm members={members} />
+        <div className="flex flex-wrap items-center gap-3">
+          <ContributorFilter
+            members={members}
+            paramName="resolvedBy"
+            value={resolvedById ?? null}
+            placeholder="Resolved by"
+          />
+          <AddBugForm members={members} />
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50">

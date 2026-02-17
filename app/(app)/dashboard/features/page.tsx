@@ -4,12 +4,20 @@ import { prisma } from "@/lib/db";
 import { AddFeatureForm } from "./AddFeatureForm";
 import { EditFeatureButton } from "./EditFeatureButton";
 import { DeleteButton } from "../DeleteButton";
+import { ContributorFilter } from "../ContributorFilter";
 
-export default async function FeaturesPage() {
+type Props = { searchParams: Promise<{ contributor?: string }> };
+
+export default async function FeaturesPage({ searchParams }: Props) {
   const session = await auth();
   if (!session?.user) redirect("/login");
 
+  const { contributor: contributorId } = await searchParams;
+
   const features = await prisma.feature.findMany({
+    where: contributorId
+      ? { contributions: { some: { memberId: contributorId } } }
+      : undefined,
     orderBy: { createdAt: "desc" },
     include: {
       contributions: { include: { member: { select: { id: true, name: true } } } },
@@ -22,14 +30,22 @@ export default async function FeaturesPage() {
 
   return (
     <div className="space-y-8">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Features</h1>
           <p className="mt-1 text-zinc-400">
             Define impact, difficulty, business value. Assign contribution %.
           </p>
         </div>
-        <AddFeatureForm members={members} />
+        <div className="flex flex-wrap items-center gap-3">
+          <ContributorFilter
+            members={members}
+            paramName="contributor"
+            value={contributorId ?? null}
+            placeholder="All contributors"
+          />
+          <AddFeatureForm members={members} />
+        </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border border-zinc-800 bg-zinc-900/50">
