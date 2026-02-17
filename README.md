@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Dynamic Equity Engine
 
-## Getting Started
+Fair, transparent, hard-to-game equity split for startups. Measures **Contribution × Impact × Risk** (risk multiplier same for everyone until you add full-time/part-time or salary cut).
 
-First, run the development server:
+## Stack
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Next.js** (App Router)
+- **PostgreSQL** + **Prisma**
+- **NextAuth** (Credentials + JWT)
+- **Role-based access**: Founder / Admin / Viewer
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Formulas
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Feature score (base)**  
+  `(impactWeight × 0.4) + (difficultyWeight × 0.3) + (businessValueWeight × 0.3)`  
+  Then split by `contributionPercent` per member.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+- **Bug score**  
+  `severity × impactWeight × 2`
 
-## Learn More
+- **Meeting score**  
+  `importanceWeight × contributionLevel`  
+  (Capped so meetings can’t exceed **10%** of a member’s total score.)
 
-To learn more about Next.js, take a look at the following resources:
+- **Decision score**  
+  `importanceWeight × influenceLevel × 2`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- **Equity %**  
+  `(Member total score / Sum of all members’ scores) × 100`
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Anti-gaming
 
-## Deploy on Vercel
+1. **Weight voting** – Feature weights can be set by **majority vote** or **average of founders’ votes**. Use **Vote** on a feature, then **Apply weights** (POST `/api/features/[id]/apply-weights`) to set weights from the average of votes.
+2. **Lock when done** – When a feature is marked **Done**, its weights are locked permanently.
+3. **Meeting cap** – Max 10% of a member’s total score can come from meetings.
+4. **Quarterly freeze** – Create snapshots (e.g. 2025-Q1) to store equity versions.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Setup
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Env**
+
+   ```bash
+   cp .env.example .env
+   # Set DATABASE_URL (PostgreSQL) and AUTH_SECRET (e.g. openssl rand -base64 32)
+   ```
+
+2. **DB**
+
+   ```bash
+   npm install
+   npx prisma db push
+   npx prisma db seed
+   ```
+
+3. **Run**
+
+   ```bash
+   npm run dev
+   ```
+
+4. **Login**  
+   After seed: `founder@startup.com` / `founder123`.
+
+## UI
+
+- **Dashboard** – Live equity %, pie chart, contribution breakdown table.
+- **Features** – Add feature (weights + contributors %). Mark done to lock weights. Vote on weights then apply from average.
+- **Bugs** – Add bug (severity, impact, resolved by).
+- **Meetings** – Add meeting (topic, importance, participants + contribution level).
+- **Decisions** – Add strategic decision (title, importance, contributors + influence level).
+- **Reports** – Quarterly snapshots, Export CSV.
+
+## API (examples)
+
+- `GET /api/equity` – Current scores and equity %.
+- `GET/POST /api/members` – List / create members (Founder/Admin).
+- `GET/POST /api/features` – List / create features.
+- `PATCH /api/features/[id]` – Update status (e.g. to `done` → locks weights) or contributions.
+- `POST /api/features/[id]/vote` – Submit your weight vote (impact, difficulty, businessValue).
+- `POST /api/features/[id]/apply-weights` – Set feature weights from average of votes (Founder/Admin).
+- `GET/POST /api/bugs`, `GET/POST /api/meetings`, `GET/POST /api/decisions`, `GET/POST /api/snapshots`.
+
+## Future: Risk multiplier
+
+Schema already has `riskMultiplier` on `Member`. When someone invests money, works full-time, or takes a salary cut, increase their multiplier; their score (and thus equity %) scales accordingly.

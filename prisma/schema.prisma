@@ -1,0 +1,190 @@
+// Dynamic Equity Engine - Prisma Schema
+// Fair, transparent, hard to game
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MemberRole {
+  FOUNDER
+  ADMIN
+  VIEWER
+}
+
+enum MemberStatus {
+  active
+  inactive
+}
+
+enum FeatureStatus {
+  draft
+  in_progress
+  done
+}
+
+model Member {
+  id             String       @id @default(cuid())
+  name           String
+  email          String       @unique
+  passwordHash   String?
+  role           MemberRole   @default(VIEWER)
+  joinedAt       DateTime     @default(now())
+  status         MemberStatus @default(active)
+  riskMultiplier Decimal      @default(1) @db.Decimal(5, 2) // Future: full-time, salary cut, etc.
+
+  featureContributions  FeatureContribution[]
+  featureWeightVotes    FeatureWeightVote[]
+  bugFixes              BugFix[]
+  meetingContributions  MeetingContribution[]
+  decisionContributions DecisionContribution[]
+  equitySnapshots       EquitySnapshotEntry[]
+  createdFeatures       Feature[]
+
+  @@map("members")
+}
+
+model Feature {
+  id                  String        @id @default(cuid())
+  title               String
+  description         String?
+  impactWeight        Int // 1-10, set by vote or proposal
+  difficultyWeight    Int // 1-5
+  businessValueWeight Int // 1-10
+  status              FeatureStatus @default(draft)
+  weightsLocked       Boolean       @default(false) // Anti-gaming: lock when status = done
+  createdAt           DateTime      @default(now())
+  completedAt         DateTime?
+
+  createdBy     Member                @relation(references: [id], onDelete: SetNull, fields: [memberId])
+  contributions FeatureContribution[]
+  weightVotes   FeatureWeightVote[]
+  memberId      String
+
+  @@map("features")
+}
+
+// Anti-gaming: weights approved by majority vote or average of founders
+model FeatureWeightVote {
+  id                  String   @id @default(cuid())
+  featureId           String
+  memberId            String
+  impactWeight        Int // 1-10
+  difficultyWeight    Int // 1-5
+  businessValueWeight Int // 1-10
+  createdAt           DateTime @default(now())
+
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, memberId])
+  @@map("feature_weight_votes")
+}
+
+model FeatureContribution {
+  id                  String @id @default(cuid())
+  featureId           String
+  memberId            String
+  contributionPercent Int // 0-100, must sum to 100 per feature
+
+  feature Feature @relation(fields: [featureId], references: [id], onDelete: Cascade)
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([featureId, memberId])
+  @@map("feature_contributions")
+}
+
+model BugFix {
+  id           String   @id @default(cuid())
+  title        String?
+  severity     Int // 1-5
+  impactWeight Int // 1-5
+  resolvedById String
+  resolvedAt   DateTime @default(now())
+
+  member Member @relation(fields: [resolvedById], references: [id], onDelete: Cascade)
+
+  @@map("bugs")
+}
+
+model Meeting {
+  id               String   @id @default(cuid())
+  topic            String
+  importanceWeight Int // 1-5
+  heldAt           DateTime @default(now())
+
+  contributions MeetingContribution[]
+
+  @@map("meetings")
+}
+
+model MeetingContribution {
+  id                String @id @default(cuid())
+  meetingId         String
+  memberId          String
+  contributionLevel Int // 1-5
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, memberId])
+  @@map("meeting_contributions")
+}
+
+model Decision {
+  id               String   @id @default(cuid())
+  title            String
+  description      String?
+  importanceWeight Int // 1-10
+  createdAt        DateTime @default(now())
+
+  contributions DecisionContribution[]
+
+  @@map("decisions")
+}
+
+model DecisionContribution {
+  id             String @id @default(cuid())
+  decisionId     String
+  memberId       String
+  influenceLevel Int // 1-5
+
+  decision Decision @relation(fields: [decisionId], references: [id], onDelete: Cascade)
+  member   Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([decisionId, memberId])
+  @@map("decision_contributions")
+}
+
+// Quarterly freeze - snapshot equity for transparency
+model EquitySnapshot {
+  id          String   @id @default(cuid())
+  periodLabel String // e.g. "2025-Q1"
+  createdAt   DateTime @default(now())
+
+  entries EquitySnapshotEntry[]
+
+  @@map("equity_snapshots")
+}
+
+model EquitySnapshotEntry {
+  id            String  @id @default(cuid())
+  snapshotId    String
+  memberId      String
+  equityPercent Decimal @db.Decimal(5, 2)
+  totalScore    Decimal @db.Decimal(12, 2)
+  featureScore  Decimal @db.Decimal(12, 2)
+  bugScore      Decimal @db.Decimal(12, 2)
+  meetingScore  Decimal @db.Decimal(12, 2)
+  decisionScore Decimal @db.Decimal(12, 2)
+
+  snapshot EquitySnapshot @relation(fields: [snapshotId], references: [id], onDelete: Cascade)
+  member   Member         @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([snapshotId, memberId])
+  @@map("equity_snapshot_entries")
+}
